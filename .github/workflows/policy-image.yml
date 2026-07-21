@@ -14,6 +14,7 @@ permissions:
 
 env:
   IMAGE: ghcr.io/tigertech-io/seerr
+  POLICY_VERSION: 3.3.0-policy.2
 
 jobs:
   validate-and-publish:
@@ -67,7 +68,7 @@ jobs:
           build-args: |
             COMMIT_TAG=${{ github.sha }}
           tags: |
-            ${{ env.IMAGE }}:3.3.0-policy.1
+            ${{ env.IMAGE }}:${{ env.POLICY_VERSION }}
             ${{ env.IMAGE }}:sha-${{ github.sha }}
 
       - name: Smoke-test published container
@@ -77,14 +78,21 @@ jobs:
             --env CONTENT_POLICY_CONFIG=/app/policy/policy.yml \
             --volume "$GITHUB_WORKSPACE/content-policy:/app/policy:ro" \
             "${IMAGE}@${{ steps.build.outputs.digest }}"
+          ready=0
           for attempt in $(seq 1 60); do
             if curl --fail --silent http://127.0.0.1:5055/api/v1/status >/dev/null; then
-              exit 0
+              ready=1
+              break
             fi
             sleep 2
           done
-          docker logs seerr-policy-smoke
-          exit 1
+          if [ "$ready" -ne 1 ]; then
+            docker logs seerr-policy-smoke
+            exit 1
+          fi
+          policy_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:5055/api/v1/content-policy/status)
+          test "$policy_status" = 403
 
       - name: Remove smoke-test container
         if: always()
@@ -94,7 +102,7 @@ jobs:
         with:
           image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
           format: spdx-json
-          output-file: seerr-3.3.0-policy.1.spdx.json
+          output-file: seerr-${{ env.POLICY_VERSION }}.spdx.json
           artifact-name: seerr-policy-sbom
 
       - uses: aquasecurity/trivy-action@v0.36.0
@@ -125,13 +133,13 @@ jobs:
           echo "High or critical fixed-vulnerability findings: $findings"
           test "$findings" -eq 0
 
-      - name: Verify GHCR package is anonymously pullable
+      - name: Verify GHCR package remains private
         run: |
-          token=$(curl --fail --silent \
-            "https://ghcr.io/token?scope=repository%3Atigertech-io%2Fseerr%3Apull" \
-            | jq --raw-output '.token')
-          test -n "$token" && test "$token" != "null"
-          curl --fail --silent --head \
-            --header "Authorization: Bearer $token" \
+          if curl --fail --silent --head \
             --header "Accept: application/vnd.oci.image.index.v1+json" \
-            "https://ghcr.io/v2/tigertech-io/seerr/manifests/3.3.0-policy.1"
+            "https://ghcr.io/v2/tigertech-io/seerr/manifests/${POLICY_VERSION}"; then
+            echo "Private policy package unexpectedly permits anonymous manifest access." >&2
+            exit 1
+          fi
+          docker buildx imagetools inspect \
+            "${IMAGE}@${{ steps.build.outputs.digest }}" >/dev/null

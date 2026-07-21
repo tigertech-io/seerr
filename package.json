@@ -1,6 +1,6 @@
 {
   "name": "seerr",
-  "version": "3.3.0-policy.1",
+  "version": "3.3.0-policy.2",
   "private": true,
   "packageManager": "pnpm@10.24.0",
   "scripts": {

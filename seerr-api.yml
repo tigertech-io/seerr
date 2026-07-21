@@ -40,6 +40,8 @@ tags:
     description: Collection of media to watch later
   - name: blocklist
     description: Blocklisted media from discovery page.
+  - name: content-policy
+    description: Administrator-only content-policy evaluation, audit, and review endpoints.
 servers:
   - url: '{server}/api/v1'
     variables:
@@ -2194,6 +2196,244 @@ paths:
                   appDataPermissions:
                     type: boolean
                     example: true
+  /content-policy/status:
+    get:
+      summary: Get content-policy engine status
+      tags:
+        - content-policy
+      responses:
+        '200':
+          description: Current policy mode, version, hash, and engine health
+          content:
+            application/json:
+              schema:
+                type: object
+        '503':
+          description: Content-policy engine unavailable
+  /content-policy/decisions:
+    get:
+      summary: List content-policy decisions
+      tags:
+        - content-policy
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: result
+          schema:
+            type: string
+            enum: [allow, deny, review]
+        - in: query
+          name: mediaType
+          schema:
+            type: string
+            enum: [movie, tv]
+      responses:
+        '200':
+          description: Paginated content-policy decisions
+          content:
+            application/json:
+              schema:
+                type: object
+  /content-policy/decisions/{mediaType}/{tmdbId}:
+    get:
+      summary: Get one content-policy decision
+      tags:
+        - content-policy
+      parameters:
+        - in: path
+          name: mediaType
+          required: true
+          schema:
+            type: string
+            enum: [movie, tv]
+        - in: path
+          name: tmdbId
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Content-policy decision and manual-deny snippet
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          description: Policy decision not found
+  /content-policy/events:
+    get:
+      summary: List content-policy events
+      tags:
+        - content-policy
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+        - in: query
+          name: size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: eventType
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated content-policy events
+          content:
+            application/json:
+              schema:
+                type: object
+  /content-policy/evaluate:
+    post:
+      summary: Force evaluation of one movie or series
+      tags:
+        - content-policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [mediaType, tmdbId]
+              properties:
+                mediaType:
+                  type: string
+                  enum: [movie, tv]
+                tmdbId:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: Content-policy evaluation
+          content:
+            application/json:
+              schema:
+                type: object
+        '403':
+          description: Interactive administrator session required
+        '503':
+          description: Evaluation unavailable
+  /content-policy/reload:
+    post:
+      summary: Atomically reload the canonical content policy
+      tags:
+        - content-policy
+      responses:
+        '200':
+          description: Reloaded policy status
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Policy reload rejected
+        '403':
+          description: Interactive administrator session required
+  /content-policy/decisions/{id}/acknowledge:
+    post:
+      summary: Acknowledge a content-policy review item
+      tags:
+        - content-policy
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [note]
+              properties:
+                note:
+                  type: string
+                  minLength: 1
+      responses:
+        '200':
+          description: Acknowledged policy decision
+          content:
+            application/json:
+              schema:
+                type: object
+        '403':
+          description: Interactive administrator session required
+        '404':
+          description: Policy decision not found
+  /content-policy/break-glass:
+    post:
+      summary: Issue a one-action content-policy override
+      tags:
+        - content-policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [mediaType, tmdbId, action, reason]
+              properties:
+                mediaType:
+                  type: string
+                  enum: [movie, tv]
+                tmdbId:
+                  type: integer
+                  minimum: 1
+                action:
+                  type: string
+                  enum: [create, approve, retry]
+                reason:
+                  type: string
+                  minLength: 20
+      responses:
+        '201':
+          description: One-action override issued
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Override request rejected
+        '403':
+          description: Interactive administrator session required
+  /content-policy/scans:
+    post:
+      summary: Run the read-only existing-library content-policy audit
+      tags:
+        - content-policy
+      responses:
+        '202':
+          description: Read-only library audit result
+          content:
+            application/json:
+              schema:
+                type: object
+        '403':
+          description: Interactive administrator session required
+        '503':
+          description: Library audit unavailable
   /settings/main:
     get:
       summary: Get main settings
