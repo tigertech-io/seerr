@@ -56,7 +56,13 @@ ARG COMMIT_TAG
 ENV NODE_ENV=production
 ENV COMMIT_TAG=${COMMIT_TAG}
 
-RUN apk add --no-cache tzdata
+RUN apk upgrade --no-cache && \
+  apk add --no-cache tzdata && \
+  rm -rf /usr/local/lib/node_modules/npm \
+    /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx \
+    /usr/local/bin/corepack
 
 USER node:node
 
@@ -72,4 +78,4 @@ RUN touch config/DOCKER && \
 
 EXPOSE 5055
 
-CMD [ "npm", "start" ]
+CMD [ "node", "dist/index.js" ]
