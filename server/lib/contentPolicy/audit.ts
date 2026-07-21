@@ -7,9 +7,38 @@ import Media from '@server/entity/Media';
 import { getSettings } from '@server/lib/settings';
 import { getContentPolicyEvaluator } from '.';
 
+type ExternalIdLookup = Pick<TheMovieDb, 'getByExternalId'>;
+
+export type SonarrTmdbResolution =
+  | { tmdbId: number; failure?: never }
+  | {
+      tmdbId?: never;
+      failure: 'not_found' | 'lookup_failed';
+      errorName?: string;
+    };
+
+export const resolveSonarrTmdbId = async (
+  tmdb: ExternalIdLookup,
+  tvdbId: number
+): Promise<SonarrTmdbResolution> => {
+  try {
+    const match = await tmdb.getByExternalId({
+      externalId: tvdbId,
+      type: 'tvdb',
+    });
+    const tmdbId = match.tv_results?.[0]?.id;
+    return tmdbId ? { tmdbId } : { failure: 'not_found' };
+  } catch (error) {
+    return {
+      failure: 'lookup_failed',
+      errorName: error instanceof Error ? error.name : 'unknown',
+    };
+  }
+};
+
 export const runContentPolicyLibraryAudit = async (
   actorUserId?: number
-): Promise<{ evaluated: number; readOnly: true }> => {
+): Promise<{ evaluated: number; unresolved: number; readOnly: true }> => {
   const evaluator = getContentPolicyEvaluator();
   const settings = getSettings();
   const sources = new Map<
@@ -48,18 +77,34 @@ export const runContentPolicyLibraryAudit = async (
   }
 
   const tmdb = new TheMovieDb();
+  let unresolved = 0;
   for (const server of settings.sonarr.filter((item) => item.syncEnabled)) {
     const api = new SonarrAPI({
       apiKey: server.apiKey,
       url: SonarrAPI.buildUrl(server, '/api/v3'),
     });
     for (const series of await api.getSeries()) {
-      const match = await tmdb.getByExternalId({
-        externalId: series.tvdbId,
-        type: 'tvdb',
+      const resolution = await resolveSonarrTmdbId(tmdb, series.tvdbId);
+      if (resolution.tmdbId) {
+        add(MediaType.TV, resolution.tmdbId, `sonarr:${series.id}`);
+        continue;
+      }
+
+      unresolved += 1;
+      await evaluator.recordEvent('library_scan_resolution_failure', {
+        mediaType: MediaType.TV,
+        actorUserId,
+        details: {
+          source: 'sonarr',
+          applicationId: series.id,
+          externalIdType: 'tvdb',
+          externalId: series.tvdbId,
+          reason: resolution.failure,
+          ...('errorName' in resolution && resolution.errorName
+            ? { errorName: resolution.errorName }
+            : {}),
+        },
       });
-      const tmdbId = match.tv_results?.[0]?.id;
-      if (tmdbId) add(MediaType.TV, tmdbId, `sonarr:${series.id}`);
     }
   }
 
@@ -85,9 +130,9 @@ export const runContentPolicyLibraryAudit = async (
   await Promise.all(workers);
   await evaluator.recordEvent('library_scan_completed', {
     actorUserId,
-    details: { evaluated: items.length, readOnly: true },
+    details: { evaluated: items.length, unresolved, readOnly: true },
   });
-  return { evaluated: items.length, readOnly: true };
+  return { evaluated: items.length, unresolved, readOnly: true };
 };
 
 export const prewarmContentPolicy = async (): Promise<number> => {

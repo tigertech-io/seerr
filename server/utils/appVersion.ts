@@ -1,6 +1,7 @@
 import logger from '@server/logger';
 import { existsSync } from 'fs';
 import path from 'path';
+import semver from 'semver';
 
 const COMMIT_TAG_PATH = path.join(__dirname, '../../committag.json');
 let commitTag = 'local';
@@ -26,4 +27,22 @@ export const getAppVersion = (): string => {
   }
 
   return finalVersion;
+};
+
+// Maintained builds append a policy revision (for example
+// `3.3.0-policy.5`) while remaining based on an exact upstream release.
+// Compare the numeric upstream versions so the custom suffix does not make a
+// current maintained build appear older than the release it tracks.
+export const isNewerUpstreamRelease = (
+  currentVersion: string,
+  releaseVersion: string
+): boolean => {
+  const current = semver.coerce(currentVersion);
+  const release = semver.coerce(releaseVersion);
+
+  if (!current || !release) {
+    return !releaseVersion.includes(currentVersion);
+  }
+
+  return semver.gt(release, current);
 };

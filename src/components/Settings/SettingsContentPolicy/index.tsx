@@ -18,6 +18,9 @@ type PolicyStatus = {
     allow: number;
     deny: number;
     review: number;
+    failures: number;
+    libraryFindings: number;
+    breakGlassEvents: number;
     activeOverrides: number;
   };
 };
@@ -29,11 +32,23 @@ type PolicyDecision = {
   result: 'allow' | 'deny' | 'review';
   matchedRuleIds: string[];
   categories: string[];
+  evidence?: Record<string, unknown>;
+  sourceMemberships?: string[];
   reviewState: string;
   updatedAt: string;
+  manualDenySnippet?: string;
 };
 
 type DecisionResponse = { results: PolicyDecision[]; totalResults: number };
+type PolicyEvent = {
+  id: number;
+  eventType: string;
+  mediaType?: 'movie' | 'tv';
+  tmdbId?: number;
+  details: Record<string, unknown>;
+  createdAt: string;
+};
+type EventResponse = { results: PolicyEvent[]; totalResults: number };
 
 const SettingsContentPolicy = () => {
   const { addToast } = useToasts();
@@ -42,8 +57,19 @@ const SettingsContentPolicy = () => {
     '/api/v1/content-policy/status',
     { refreshInterval: 15000 }
   );
+  const [resultFilter, setResultFilter] = useState('');
+  const [mediaFilter, setMediaFilter] = useState('');
+  const decisionQuery = new URLSearchParams({ size: '50' });
+  if (resultFilter) decisionQuery.set('result', resultFilter);
+  if (mediaFilter) decisionQuery.set('mediaType', mediaFilter);
   const { data: decisions, mutate: refreshDecisions } =
-    useSWR<DecisionResponse>('/api/v1/content-policy/decisions?size=50');
+    useSWR<DecisionResponse>(
+      `/api/v1/content-policy/decisions?${decisionQuery.toString()}`
+    );
+  const { data: events, mutate: refreshEvents } = useSWR<EventResponse>(
+    '/api/v1/content-policy/events?size=50',
+    { refreshInterval: 15000 }
+  );
   const [mediaType, setMediaType] = useState<'movie' | 'tv'>('movie');
   const [tmdbId, setTmdbId] = useState('');
   const [action, setAction] = useState<'create' | 'approve' | 'retry'>(
@@ -52,6 +78,8 @@ const SettingsContentPolicy = () => {
   const [reason, setReason] = useState('');
   const [overrideToken, setOverrideToken] = useState('');
   const [reviewNote, setReviewNote] = useState('');
+  const [selectedDecision, setSelectedDecision] = useState<PolicyDecision>();
+  const [scanSummary, setScanSummary] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -71,9 +99,10 @@ const SettingsContentPolicy = () => {
   const run = async (operation: () => Promise<unknown>, success: string) => {
     setBusy(true);
     try {
-      await operation();
+      const result = await operation();
+      if (result === false) return;
       addToast(success, { appearance: 'success', autoDismiss: true });
-      await Promise.all([refreshStatus(), refreshDecisions()]);
+      await Promise.all([refreshStatus(), refreshDecisions(), refreshEvents()]);
     } catch (error) {
       addToast(
         axios.isAxiosError(error)
@@ -89,7 +118,7 @@ const SettingsContentPolicy = () => {
     }
   };
 
-  if (!status || !decisions) return <LoadingSpinner />;
+  if (!status || !decisions || !events) return <LoadingSpinner />;
 
   return (
     <>
@@ -118,10 +147,14 @@ const SettingsContentPolicy = () => {
             buttonType="primary"
             disabled={busy}
             onClick={() =>
-              run(
-                () => axios.post('/api/v1/content-policy/scans'),
-                'Read-only library audit completed.'
-              )
+              run(async () => {
+                const response = await axios.post(
+                  '/api/v1/content-policy/scans'
+                );
+                setScanSummary(
+                  `${response.data.evaluated} evaluated; ${response.data.unresolved} unresolved; read-only confirmed.`
+                );
+              }, 'Read-only library audit completed.')
             }
           >
             Run library audit
@@ -129,7 +162,13 @@ const SettingsContentPolicy = () => {
         </div>
       </div>
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+      {scanSummary && (
+        <div className="mb-6 rounded border border-indigo-500 bg-gray-800 p-3 text-sm">
+          Last on-demand scan: {scanSummary}
+        </div>
+      )}
+
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-9">
         <div className="rounded-lg bg-gray-800 p-4">
           <div className="text-xs text-gray-400">Mode</div>
           <Badge badgeType={status.mode === 'audit' ? 'warning' : 'danger'}>
@@ -153,6 +192,18 @@ const SettingsContentPolicy = () => {
         <div className="rounded-lg bg-gray-800 p-4">
           <div className="text-xs text-gray-400">Review</div>
           <div className="text-2xl">{status.counts.review}</div>
+        </div>
+        <div className="rounded-lg bg-gray-800 p-4">
+          <div className="text-xs text-gray-400">Failures</div>
+          <div className="text-2xl">{status.counts.failures}</div>
+        </div>
+        <div className="rounded-lg bg-gray-800 p-4">
+          <div className="text-xs text-gray-400">Library findings</div>
+          <div className="text-2xl">{status.counts.libraryFindings}</div>
+        </div>
+        <div className="rounded-lg bg-gray-800 p-4">
+          <div className="text-xs text-gray-400">Break-glass events</div>
+          <div className="text-2xl">{status.counts.breakGlassEvents}</div>
         </div>
         <div className="rounded-lg bg-gray-800 p-4">
           <div className="text-xs text-gray-400">Overrides</div>
@@ -239,11 +290,16 @@ const SettingsContentPolicy = () => {
               disabled={busy || !Number(tmdbId) || reason.trim().length < 20}
               onClick={() =>
                 run(async () => {
+                  const confirmed = window.confirm(
+                    `Issue one ${action} override for ${mediaType}:${tmdbId}? It expires 15 minutes after issuance.\n\nReason: ${reason.trim()}`
+                  );
+                  if (!confirmed) return false;
                   const response = await axios.post(
                     '/api/v1/content-policy/break-glass',
                     { mediaType, tmdbId: Number(tmdbId), action, reason }
                   );
                   setOverrideToken(response.data.token);
+                  return true;
                 }, 'Break-glass token issued.')
               }
             >
@@ -262,9 +318,32 @@ const SettingsContentPolicy = () => {
       </div>
 
       <section className="rounded-lg bg-gray-800 p-5">
-        <h3 className="mb-4 text-lg font-semibold">
-          Recent decisions ({decisions.totalResults})
-        </h3>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-lg font-semibold">
+            Decisions ({decisions.totalResults})
+          </h3>
+          <div className="flex gap-2">
+            <select
+              className="rounded bg-gray-700 px-3 py-2"
+              value={mediaFilter}
+              onChange={(event) => setMediaFilter(event.target.value)}
+            >
+              <option value="">All media</option>
+              <option value="movie">Movies</option>
+              <option value="tv">Series</option>
+            </select>
+            <select
+              className="rounded bg-gray-700 px-3 py-2"
+              value={resultFilter}
+              onChange={(event) => setResultFilter(event.target.value)}
+            >
+              <option value="">All decisions</option>
+              <option value="allow">Allow</option>
+              <option value="deny">Deny</option>
+              <option value="review">Review</option>
+            </select>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="text-left text-gray-400">
@@ -274,6 +353,7 @@ const SettingsContentPolicy = () => {
                 <th className="p-2">Categories / rules</th>
                 <th className="p-2">Review</th>
                 <th className="p-2">Updated</th>
+                <th className="p-2">Evidence</th>
               </tr>
             </thead>
             <tbody>
@@ -339,6 +419,103 @@ const SettingsContentPolicy = () => {
                   </td>
                   <td className="p-2 text-gray-400">
                     {new Date(decision.updatedAt).toLocaleString()}
+                  </td>
+                  <td className="p-2">
+                    <Button
+                      buttonSize="sm"
+                      onClick={async () => {
+                        const response = await axios.get(
+                          `/api/v1/content-policy/decisions/${decision.mediaType}/${decision.tmdbId}`
+                        );
+                        setSelectedDecision(response.data);
+                      }}
+                    >
+                      Inspect
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {selectedDecision && (
+        <section className="mt-8 rounded-lg bg-gray-800 p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-semibold">
+              Evidence for {selectedDecision.mediaType}:
+              {selectedDecision.tmdbId}
+            </h3>
+            <Button
+              buttonSize="sm"
+              onClick={() => setSelectedDecision(undefined)}
+            >
+              Close
+            </Button>
+          </div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <div>
+              <div className="mb-1 text-xs text-gray-400">Sources</div>
+              <pre className="overflow-x-auto rounded bg-gray-900 p-3 text-xs">
+                {JSON.stringify(
+                  selectedDecision.sourceMemberships ?? [],
+                  null,
+                  2
+                )}
+              </pre>
+            </div>
+            <div>
+              <div className="mb-1 text-xs text-gray-400">Matched evidence</div>
+              <pre className="overflow-x-auto rounded bg-gray-900 p-3 text-xs">
+                {JSON.stringify(selectedDecision.evidence ?? {}, null, 2)}
+              </pre>
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="mb-1 text-xs text-gray-400">
+              Repository manual-deny snippet
+            </div>
+            <pre className="overflow-x-auto rounded bg-gray-900 p-3 text-xs">
+              {selectedDecision.manualDenySnippet}
+            </pre>
+          </div>
+        </section>
+      )}
+
+      <section className="mt-8 rounded-lg bg-gray-800 p-5">
+        <h3 className="mb-4 text-lg font-semibold">
+          Events, scans, failures, and overrides ({events.totalResults})
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="text-left text-gray-400">
+              <tr>
+                <th className="p-2">Time</th>
+                <th className="p-2">Event</th>
+                <th className="p-2">Media</th>
+                <th className="p-2">Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.results.map((event) => (
+                <tr
+                  key={event.id}
+                  className="border-t border-gray-700 align-top"
+                >
+                  <td className="whitespace-nowrap p-2 text-gray-400">
+                    {new Date(event.createdAt).toLocaleString()}
+                  </td>
+                  <td className="p-2 font-mono">{event.eventType}</td>
+                  <td className="p-2 font-mono">
+                    {event.mediaType && event.tmdbId
+                      ? `${event.mediaType}:${event.tmdbId}`
+                      : '—'}
+                  </td>
+                  <td className="p-2">
+                    <pre className="max-w-xl overflow-x-auto whitespace-pre-wrap text-xs text-gray-300">
+                      {JSON.stringify(event.details)}
+                    </pre>
                   </td>
                 </tr>
               ))}

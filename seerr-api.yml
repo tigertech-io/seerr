@@ -2430,6 +2430,17 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [evaluated, unresolved, readOnly]
+                properties:
+                  evaluated:
+                    type: integer
+                    minimum: 0
+                  unresolved:
+                    type: integer
+                    minimum: 0
+                  readOnly:
+                    type: boolean
+                    enum: [true]
         '403':
           description: Interactive administrator session required
         '503':

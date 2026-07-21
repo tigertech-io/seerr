@@ -13,7 +13,7 @@ import logger from '@server/logger';
 import { createHash, randomBytes } from 'crypto';
 import fs from 'fs';
 import yaml from 'js-yaml';
-import { IsNull, LessThan, MoreThan } from 'typeorm';
+import { In, IsNull, LessThan, Like, MoreThan } from 'typeorm';
 import { sendContentPolicyNotification } from './notifications';
 import type {
   ContentPolicy,
@@ -246,15 +246,46 @@ export class ContentPolicyEvaluator {
   public async status() {
     const policy = await this.ensureLoaded();
     const decisionRepository = getRepository(ContentPolicyDecision);
+    const eventRepository = getRepository(ContentPolicyEvent);
     const overrideRepository = getRepository(ContentPolicyOverride);
-    const [allow, deny, review, activeOverrides] = await Promise.all([
+    const [
+      allow,
+      deny,
+      review,
+      activeOverrides,
+      findingDecisions,
+      failures,
+      breakGlassEvents,
+    ] = await Promise.all([
       decisionRepository.count({ where: { result: 'allow' } }),
       decisionRepository.count({ where: { result: 'deny' } }),
       decisionRepository.count({ where: { result: 'review' } }),
       overrideRepository.count({
         where: { consumedAt: IsNull(), expiresAt: MoreThan(new Date()) },
       }),
+      decisionRepository.find({
+        where: { result: In(['deny', 'review']) },
+        select: { sourceMemberships: true },
+      }),
+      eventRepository.count({
+        where: {
+          eventType: In([
+            'policy_reload_failed',
+            'metadata_fetch_failure',
+            'discover_filter_failure',
+            'library_scan_failed',
+            'library_scan_resolution_failure',
+            'dispatch_blocked',
+          ]),
+        },
+      }),
+      eventRepository.count({ where: { eventType: Like('break_glass_%') } }),
     ]);
+    const libraryFindings = findingDecisions.filter((decision) =>
+      decision.sourceMemberships.some((source) =>
+        /^(seerr|radarr|sonarr):/.test(source)
+      )
+    ).length;
     return {
       mode: policy.mode,
       policyVersion: policy.policyVersion,
@@ -262,7 +293,15 @@ export class ContentPolicyEvaluator {
       loadedAt: this.loadedAt,
       healthy: !this.loadError,
       loadError: this.loadError,
-      counts: { allow, deny, review, activeOverrides },
+      counts: {
+        allow,
+        deny,
+        review,
+        failures,
+        libraryFindings,
+        breakGlassEvents,
+        activeOverrides,
+      },
     };
   }
 

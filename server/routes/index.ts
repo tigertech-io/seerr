@@ -26,7 +26,11 @@ import {
   appDataPermissions,
   appDataStatus,
 } from '@server/utils/appDataVolume';
-import { getAppVersion, getCommitTag } from '@server/utils/appVersion';
+import {
+  getAppVersion,
+  getCommitTag,
+  isNewerUpstreamRelease,
+} from '@server/utils/appVersion';
 import restartFlag from '@server/utils/restartFlag';
 import { isPerson } from '@server/utils/typeHelpers';
 import { Router } from 'express';
@@ -83,7 +87,12 @@ router.get<unknown, StatusResponse>('/status', async (req, res) => {
     if (releases.length) {
       const latestVersion = releases[0];
 
-      if (!latestVersion.name.includes(currentVersion)) {
+      if (
+        isNewerUpstreamRelease(
+          currentVersion,
+          latestVersion.tag_name || latestVersion.name
+        )
+      ) {
         updateAvailable = true;
       }
     }
