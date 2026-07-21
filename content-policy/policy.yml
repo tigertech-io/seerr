@@ -1,0 +1,233 @@
+policyVersion: '2026-07-21.1'
+mode: audit
+cacheHours: 6
+hydrationConcurrency: 8
+overrideMinutes: 15
+
+supportedLanguages:
+  - en
+  - fr
+
+deniedGenreIds:
+  - 27 # Horror
+
+manualDeny:
+  movie:
+    - 200066 # Il frullo del passero; TMDB currently has no keywords
+  tv: []
+
+deniedKeywords:
+  - id: keyword.pornography-exploitation
+    category: pornography-exploitation
+    keywordIds:
+      - 445 # pornography
+      - 155477 # softcore
+      - 375524 # hardcore
+      - 190370 # erotic movie
+      - 10053 # sexploitation
+      - 11534 # sexual violence
+      - 3880 # snuff
+      - 254053 # snuff film
+      - 193698 # torture porn
+      - 6443 # child pornography
+      - 570 # rape
+      - 169618 # bestiality
+      - 5919 # necrophilia
+      - 33841 # incest
+      - 256466 # erotic
+      - 198385 # hentai
+      - 207767 # erotic thriller
+      - 341367 # soft porn
+      - 281741 # nudity
+      - 13059 # prostitution
+      - 459 # sexual obsession
+      - 267122 # sex
+      - 240530 # erotic horror
+      - 302602 # sex abuse
+      - 155301 # rough sex
+      - 15049 # sex trafficking
+      - 18314 # internet porn
+
+  - id: keyword.horror
+    category: horror
+    keywordIds:
+      - 315058 # horror
+      - 12339 # slasher
+      - 256183 # supernatural horror
+      - 283085 # body horror
+      - 209568 # folk horror
+      - 295907 # psychological horror
+      - 163053 # found footage
+      - 12377 # zombie
+      - 161261 # demonic possession
+      - 3358 # haunted house
+      - 162846 # ghost
+      - 3133 # vampire
+      - 221291 # warewolf (native TMDB keyword spelling)
+      - 50009 # survival horror
+      - 232669 # jump scare
+      - 230191 # haunted
+      - 345799 # extreme horror
+
+  - id: keyword.occult
+    category: occult
+    keywordIds:
+      - 241827 # demonic
+      - 156174 # occult
+      - 254630 # occultism
+      - 3099 # satanism
+      - 4252 # black magic
+      - 40931 # witchcraft
+      - 190396 # devil worship
+      - 10112 # ouija board
+      - 162745 # ritual sacrifice
+      - 10864 # human sacrifice
+      - 2626 # exorcism
+      - 15001 # demon
+      - 161270 # satanic ritual
+      - 12564 # werewolf
+      - 279185 # satanic
+      - 163055 # satanic cult
+      - 9853 # paranormal
+      - 176561 # spiritualism
+      - 162766 # religious cult
+      - 3392 # voodoo
+      - 351770 # demon summoning
+      - 291402 # demonic cult
+
+  - id: keyword.illegal-disturbing
+    category: illegal-disturbing
+    keywordIds:
+      - 367145 # graphic violence
+      - 10292 # gore
+      - 4426 # sadism
+      - 13006 # torture
+      - 287884 # organ trafficking
+
+explicitText:
+  - id: text.pornography-explicit
+    category: pornography-exploitation
+    phrases:
+      - child pornography
+      - pornographie infantile
+      - torture porn
+      - pornographie de torture
+      - sex trafficking
+      - traite sexuelle
+      - internet porn
+      - pornographie sur internet
+      - erotic horror
+      - horreur erotique
+      - erotic thriller
+      - thriller erotique
+      - soft porn
+      - pornographie soft
+      - sexploitation
+      - snuff film
+      - film snuff
+      - rough sex
+      - rapports sexuels violents
+
+  - id: text.horror-explicit
+    category: horror
+    phrases:
+      - body horror
+      - horreur corporelle
+      - folk horror
+      - horreur folklorique
+      - psychological horror
+      - horreur psychologique
+      - survival horror
+      - horreur de survie
+      - extreme horror
+      - horreur extreme
+      - haunted house
+      - maison hantee
+      - demonic possession
+      - possession demoniaque
+
+  - id: text.occult-explicit
+    category: occult
+    phrases:
+      - demon summoning
+      - invocation de demon
+      - demonic cult
+      - culte demoniaque
+      - satanic cult
+      - culte satanique
+      - devil worship
+      - culte du diable
+      - black magic
+      - magie noire
+      - human sacrifice
+      - sacrifice humain
+      - ritual sacrifice
+      - sacrifice rituel
+      - ouija board
+      - planche ouija
+
+  - id: text.illegal-disturbing-explicit
+    category: illegal-disturbing
+    phrases:
+      - organ trafficking
+      - trafic d organes
+      - sexual abuse
+      - abus sexuel
+      - sexual violence
+      - violence sexuelle
+      - graphic violence
+      - violence graphique
+
+reviewText:
+  - id: text.sexual-context-review
+    category: pornography-exploitation
+    phrases:
+      - erotic
+      - erotique
+      - nudity
+      - nudite
+      - prostitution
+      - sex worker
+      - travailleur du sexe
+      - sexual obsession
+      - obsession sexuelle
+
+  - id: text.horror-context-review
+    category: horror
+    phrases:
+      - haunted
+      - hante
+      - ghost
+      - fantome
+      - vampire
+      - zombie
+      - slasher
+      - jump scare
+
+  - id: text.occult-context-review
+    category: occult
+    phrases:
+      - occult
+      - occulte
+      - paranormal
+      - supernatural
+      - surnaturel
+      - witchcraft
+      - sorcellerie
+      - voodoo
+      - satanic
+      - satanique
+      - demonic
+      - demoniaque
+      - exorcism
+      - exorcisme
+
+  - id: text.disturbing-context-review
+    category: illegal-disturbing
+    phrases:
+      - gore
+      - torture
+      - sadism
+      - sadisme
+      - trafficking
+      - trafic

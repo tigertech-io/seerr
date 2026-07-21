@@ -21,6 +21,10 @@ import type {
   MediaRequestBody,
   RequestResultsResponse,
 } from '@server/interfaces/api/requestInterfaces';
+import {
+  ContentPolicyError,
+  getContentPolicyEvaluator,
+} from '@server/lib/contentPolicy';
 import { Permission } from '@server/lib/permissions';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
@@ -300,7 +304,7 @@ requestRoutes.get<Record<string, unknown>, RequestResultsResponse>(
   }
 );
 
-requestRoutes.post<never, MediaRequest, MediaRequestBody>(
+requestRoutes.post<never, unknown, MediaRequestBody>(
   '/',
   async (req, res, next) => {
     try {
@@ -310,12 +314,22 @@ requestRoutes.post<never, MediaRequest, MediaRequestBody>(
           message: 'You must be logged in to request media.',
         });
       }
-      const request = await MediaRequest.request(req.body, req.user);
+      const request = await MediaRequest.request(req.body, req.user, {
+        policyOverrideToken: req.header('X-Seerr-Policy-Override'),
+      });
 
       return res.status(201).json(request);
     } catch (error) {
       if (!(error instanceof Error)) {
         return;
+      }
+
+      if (error instanceof ContentPolicyError) {
+        return res.status(error.status).json({
+          status: error.status,
+          code: error.code,
+          message: 'This title is unavailable.',
+        });
       }
 
       switch (error.constructor) {
@@ -644,13 +658,30 @@ requestRoutes.post<{
         relations: { requestedBy: true, modifiedBy: true },
       });
 
+      const authorization = await getContentPolicyEvaluator().assertAction(
+        request.type,
+        request.media.tmdbId,
+        'retry',
+        req.user?.id as number,
+        req.header('X-Seerr-Policy-Override')
+      );
+
       // this also triggers updating the parent media's status & sending to *arr
       request.status = MediaRequestStatus.APPROVED;
       request.modifiedBy = req.user;
+      request.policyDecisionId = authorization.decision.id;
+      request.policyOverrideId = authorization.override?.id;
       await requestRepository.save(request);
 
       return res.status(200).json(request);
     } catch (e) {
+      if (e instanceof ContentPolicyError) {
+        return res.status(e.status).json({
+          status: e.status,
+          code: e.code,
+          message: 'This title is unavailable.',
+        });
+      }
       logger.error('Error processing request retry', {
         label: 'Media Request',
         message: e.message,
@@ -689,12 +720,31 @@ requestRoutes.post<{
           break;
       }
 
+      if (newStatus === MediaRequestStatus.APPROVED) {
+        const authorization = await getContentPolicyEvaluator().assertAction(
+          request.type,
+          request.media.tmdbId,
+          'approve',
+          req.user?.id as number,
+          req.header('X-Seerr-Policy-Override')
+        );
+        request.policyDecisionId = authorization.decision.id;
+        request.policyOverrideId = authorization.override?.id;
+      }
+
       request.status = newStatus;
       request.modifiedBy = req.user;
       await requestRepository.save(request);
 
       return res.status(200).json(request);
     } catch (e) {
+      if (e instanceof ContentPolicyError) {
+        return res.status(e.status).json({
+          status: e.status,
+          code: e.code,
+          message: 'This title is unavailable.',
+        });
+      }
       logger.error('Error processing request update', {
         label: 'Media Request',
         message: e.message,

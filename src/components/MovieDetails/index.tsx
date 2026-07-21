@@ -112,6 +112,15 @@ interface MovieDetailsProps {
   movie?: MovieDetailsType;
 }
 
+type PolicyAwareMovieDetails = MovieDetailsType & {
+  contentPolicy?: {
+    result: 'allow' | 'deny' | 'review';
+    mode: 'audit' | 'enforce';
+    categories: string[];
+    matchedRuleIds: string[];
+  };
+};
+
 const MovieDetails = ({ movie }: MovieDetailsProps) => {
   const settings = useSettings();
   const { user, hasPermission } = useUser();
@@ -137,7 +146,7 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
     data,
     error,
     mutate: revalidate,
-  } = useSWR<MovieDetailsType>(`/api/v1/movie/${router.query.movieId}`, {
+  } = useSWR<PolicyAwareMovieDetails>(`/api/v1/movie/${router.query.movieId}`, {
     fallbackData: movie,
     refreshInterval: refreshIntervalHelper(
       {
@@ -619,12 +628,23 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
           <div className="z-20">
             <PlayButton links={mediaLinks} />
           </div>
-          <RequestButton
-            mediaType="movie"
-            media={data.mediaInfo}
-            tmdbId={data.id}
-            onUpdate={() => revalidate()}
-          />
+          {data.contentPolicy?.mode === 'enforce' &&
+          data.contentPolicy.result !== 'allow' ? (
+            <Button
+              as="a"
+              buttonType="danger"
+              href={`/settings/content-policy?mediaType=movie&tmdbId=${data.id}&action=create`}
+            >
+              Policy {data.contentPolicy.result} — review break glass
+            </Button>
+          ) : (
+            <RequestButton
+              mediaType="movie"
+              media={data.mediaInfo}
+              tmdbId={data.id}
+              onUpdate={() => revalidate()}
+            />
+          )}
           {(data.mediaInfo?.status === MediaStatus.AVAILABLE ||
             (settings.currentSettings.movie4kEnabled &&
               hasPermission(

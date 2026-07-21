@@ -9,6 +9,10 @@ import {
 import { getRepository } from '@server/datasource';
 import OverrideRule from '@server/entity/OverrideRule';
 import type { MediaRequestBody } from '@server/interfaces/api/requestInterfaces';
+import {
+  getContentPolicyEvaluator,
+  type ContentPolicyMetadata,
+} from '@server/lib/contentPolicy';
 import notificationManager, { Notification } from '@server/lib/notifications';
 import { Permission } from '@server/lib/permissions';
 import { getSettings } from '@server/lib/settings';
@@ -40,6 +44,7 @@ export class BlocklistedMediaError extends Error {}
 
 type MediaRequestOptions = {
   isAutoRequest?: boolean;
+  policyOverrideToken?: string;
 };
 
 @Entity()
@@ -123,6 +128,38 @@ export class MediaRequest {
       requestBody.mediaType === MediaType.MOVIE
         ? await tmdb.getMovie({ movieId: requestBody.mediaId })
         : await tmdb.getTvShow({ tvId: requestBody.mediaId });
+
+    const rawPolicyMedia = tmdbMedia as unknown as Record<string, unknown>;
+    const rawKeywords = rawPolicyMedia.keywords as
+      | {
+          keywords?: { id: number; name?: string }[];
+          results?: { id: number; name?: string }[];
+        }
+      | undefined;
+    const policyMetadata: ContentPolicyMetadata = {
+      id: Number(rawPolicyMedia.id),
+      mediaType: requestBody.mediaType,
+      adult: rawPolicyMedia.adult === true,
+      title: String(rawPolicyMedia.title ?? rawPolicyMedia.name ?? ''),
+      originalTitle: String(
+        rawPolicyMedia.original_title ?? rawPolicyMedia.original_name ?? ''
+      ),
+      tagline: String(rawPolicyMedia.tagline ?? ''),
+      overview: String(rawPolicyMedia.overview ?? ''),
+      originalLanguage: String(rawPolicyMedia.original_language ?? ''),
+      genreIds: Array.isArray(rawPolicyMedia.genres)
+        ? (rawPolicyMedia.genres as { id: number }[]).map(({ id }) => id)
+        : [],
+      keywords: rawKeywords?.keywords ?? rawKeywords?.results ?? [],
+    };
+    const policyAuthorization = await getContentPolicyEvaluator().assertAction(
+      requestBody.mediaType,
+      requestBody.mediaId,
+      'create',
+      user.id,
+      options.policyOverrideToken,
+      policyMetadata
+    );
 
     let media = await mediaRepository.findOne({
       where: {
@@ -385,6 +422,8 @@ export class MediaRequest {
         rootFolder: rootFolder,
         tags: tags,
         isAutoRequest: options.isAutoRequest ?? false,
+        policyDecisionId: policyAuthorization.decision.id,
+        policyOverrideId: policyAuthorization.override?.id,
       });
 
       await requestRepository.save(request);
@@ -516,6 +555,8 @@ export class MediaRequest {
             })
         ),
         isAutoRequest: options.isAutoRequest ?? false,
+        policyDecisionId: policyAuthorization.decision.id,
+        policyOverrideId: policyAuthorization.override?.id,
       });
 
       await requestRepository.save(request);
@@ -621,6 +662,12 @@ export class MediaRequest {
 
   @Column({ default: false })
   public isAutoRequest: boolean;
+
+  @Column({ type: 'integer', nullable: true })
+  public policyDecisionId?: number | null;
+
+  @Column({ type: 'integer', nullable: true })
+  public policyOverrideId?: number | null;
 
   constructor(init?: Partial<MediaRequest>) {
     Object.assign(this, init);

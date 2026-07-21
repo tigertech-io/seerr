@@ -366,7 +366,10 @@ export type JobId =
   | 'jellyfin-full-scan'
   | 'image-cache-cleanup'
   | 'availability-sync'
-  | 'process-blocklisted-tags';
+  | 'process-blocklisted-tags'
+  | 'content-policy-prewarm'
+  | 'content-policy-library-audit'
+  | 'content-policy-digest';
 
 export interface AllSettings {
   clientId: string;
@@ -604,6 +607,15 @@ class Settings {
         },
         'process-blocklisted-tags': {
           schedule: '0 30 1 */7 * *',
+        },
+        'content-policy-prewarm': {
+          schedule: '0 0 * * * *',
+        },
+        'content-policy-library-audit': {
+          schedule: '0 30 3 * * *',
+        },
+        'content-policy-digest': {
+          schedule: '0 0 8 * * *',
         },
       },
       network: {

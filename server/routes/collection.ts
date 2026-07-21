@@ -1,6 +1,8 @@
 import TheMovieDb from '@server/api/themoviedb';
 import { MediaType } from '@server/constants/media';
 import Media from '@server/entity/Media';
+import { filterContentPolicyPayload } from '@server/lib/contentPolicy/filter';
+import { Permission } from '@server/lib/permissions';
 import logger from '@server/logger';
 import { mapCollection } from '@server/models/Collection';
 import { Router } from 'express';
@@ -24,7 +26,18 @@ collectionRoutes.get<{ id: string }>('/:id', async (req, res, next) => {
       }))
     );
 
-    return res.status(200).json(mapCollection(collection, media));
+    const mapped = mapCollection(collection, media);
+    const filtered = await filterContentPolicyPayload(
+      { results: mapped.parts },
+      req.user
+    );
+    if (
+      !req.user?.hasPermission(Permission.ADMIN) &&
+      filtered.results.length !== mapped.parts.length
+    ) {
+      return next({ status: 404, message: 'Collection not found.' });
+    }
+    return res.status(200).json({ ...mapped, parts: filtered.results });
   } catch (e) {
     logger.debug('Something went wrong retrieving collection', {
       label: 'API',

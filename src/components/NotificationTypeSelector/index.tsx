@@ -64,6 +64,15 @@ const messages = defineMessages('components.NotificationTypeSelector', {
   mediaautorequested: 'Request Automatically Submitted',
   mediaautorequestedDescription:
     'Get notified when new media requests are automatically submitted for items on Your Watchlist.',
+  contentPolicyFailure: 'Content Policy Failure',
+  contentPolicyFailureDescription:
+    'Send immediate notifications for policy engine failures and defensive dispatch blocks.',
+  contentPolicyBreakGlass: 'Content Policy Break Glass',
+  contentPolicyBreakGlassDescription:
+    'Send immediate notifications when a break-glass override is issued, used, rejected, or expires unused.',
+  contentPolicyDigest: 'Content Policy Daily Digest',
+  contentPolicyDigestDescription:
+    'Send the daily digest when new denies, review items, or library findings exist.',
 });
 
 export const hasNotificationType = (
@@ -106,6 +115,9 @@ export enum Notification {
   ISSUE_RESOLVED = 1024,
   ISSUE_REOPENED = 2048,
   MEDIA_AUTO_REQUESTED = 4096,
+  CONTENT_POLICY_FAILURE = 8192,
+  CONTENT_POLICY_BREAK_GLASS = 16384,
+  CONTENT_POLICY_DIGEST = 32768,
 }
 
 export const ALL_NOTIFICATIONS = Object.values(Notification)
@@ -196,6 +208,36 @@ const NotificationTypeSelector = ({
             ))));
 
     const types: NotificationItem[] = [
+      {
+        id: 'content-policy-failure',
+        name: intl.formatMessage(messages.contentPolicyFailure),
+        description: intl.formatMessage(
+          messages.contentPolicyFailureDescription
+        ),
+        value: Notification.CONTENT_POLICY_FAILURE,
+        hidden: Boolean(user && !hasPermission(Permission.ADMIN)),
+        hasNotifyUser: false,
+      },
+      {
+        id: 'content-policy-break-glass',
+        name: intl.formatMessage(messages.contentPolicyBreakGlass),
+        description: intl.formatMessage(
+          messages.contentPolicyBreakGlassDescription
+        ),
+        value: Notification.CONTENT_POLICY_BREAK_GLASS,
+        hidden: Boolean(user && !hasPermission(Permission.ADMIN)),
+        hasNotifyUser: false,
+      },
+      {
+        id: 'content-policy-digest',
+        name: intl.formatMessage(messages.contentPolicyDigest),
+        description: intl.formatMessage(
+          messages.contentPolicyDigestDescription
+        ),
+        value: Notification.CONTENT_POLICY_DIGEST,
+        hidden: Boolean(user && !hasPermission(Permission.ADMIN)),
+        hasNotifyUser: false,
+      },
       {
         id: 'media-auto-requested',
         name: intl.formatMessage(messages.mediaautorequested),

@@ -5,9 +5,11 @@ import type {
   TmdbMovieResult,
   TmdbTvResult,
 } from '@server/api/themoviedb/interfaces';
+import { MediaType } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import DiscoverSlider from '@server/entity/DiscoverSlider';
 import type { StatusResponse } from '@server/interfaces/api/settingsInterfaces';
+import { contentPolicyDetailGuard } from '@server/lib/contentPolicy/filter';
 import { Permission } from '@server/lib/permissions';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
@@ -31,6 +33,7 @@ import { Router } from 'express';
 import authRoutes from './auth';
 import blocklistRoutes from './blocklist';
 import collectionRoutes from './collection';
+import contentPolicyRoutes from './contentPolicy';
 import discoverRoutes, { createTmdbWithRegionLanguage } from './discover';
 import issueRoutes from './issue';
 import issueCommentRoutes from './issueComment';
@@ -148,6 +151,11 @@ router.get(
   }
 );
 router.use('/settings', isAuthenticated(Permission.ADMIN), settingsRoutes);
+router.use(
+  '/content-policy',
+  isAuthenticated(Permission.ADMIN),
+  contentPolicyRoutes
+);
 router.use('/search', isAuthenticated(), searchRoutes);
 router.use('/discover', isAuthenticated(), discoverRoutes);
 router.use('/request', isAuthenticated(), requestRoutes);
@@ -162,6 +170,16 @@ router.use(
     sunsetDate: '2026-06-01',
   }),
   blocklistRoutes
+);
+router.use(
+  '/movie/:id',
+  isAuthenticated(),
+  contentPolicyDetailGuard(MediaType.MOVIE)
+);
+router.use(
+  '/tv/:id',
+  isAuthenticated(),
+  contentPolicyDetailGuard(MediaType.TV)
 );
 router.use('/movie', isAuthenticated(), movieRoutes);
 router.use('/tv', isAuthenticated(), tvRoutes);

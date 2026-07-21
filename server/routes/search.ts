@@ -1,12 +1,14 @@
 import TheMovieDb from '@server/api/themoviedb';
 import type { TmdbSearchMultiResponse } from '@server/api/themoviedb/interfaces';
 import Media from '@server/entity/Media';
+import { contentPolicyResponseFilter } from '@server/lib/contentPolicy/filter';
 import { findSearchProvider } from '@server/lib/search';
 import logger from '@server/logger';
 import { mapSearchResults } from '@server/models/Search';
 import { Router } from 'express';
 
 const searchRoutes = Router();
+searchRoutes.use(contentPolicyResponseFilter);
 
 searchRoutes.get('/', async (req, res, next) => {
   const queryString = req.query.query as string;

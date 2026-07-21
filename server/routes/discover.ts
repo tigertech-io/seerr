@@ -11,6 +11,7 @@ import type {
   GenreSliderItem,
   WatchlistResponse,
 } from '@server/interfaces/api/discoverInterfaces';
+import { contentPolicyResponseFilter } from '@server/lib/contentPolicy/filter';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import { mapProductionCompany } from '@server/models/Movie';
@@ -59,6 +60,7 @@ export const createTmdbWithBlocklistSettings = (): TheMovieDb => {
 };
 
 const discoverRoutes = Router();
+discoverRoutes.use(contentPolicyResponseFilter);
 
 const QueryFilterOptions = z.object({
   page: z.coerce.string().optional(),

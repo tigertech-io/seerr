@@ -123,6 +123,25 @@ class EmailAgent
       };
     }
 
+    if (
+      type === Notification.CONTENT_POLICY_FAILURE ||
+      type === Notification.CONTENT_POLICY_BREAK_GLASS ||
+      type === Notification.CONTENT_POLICY_DIGEST
+    ) {
+      return {
+        template: path.join(__dirname, '../../../templates/email/test-email'),
+        message: { to: recipientEmail },
+        locals: {
+          body: `${payload.subject}${payload.message ? `\n\n${payload.message}` : ''}`,
+          applicationUrl,
+          applicationTitle,
+          logoUrl,
+          recipientName,
+          recipientEmail,
+        },
+      };
+    }
+
     const mediaType = payload.media
       ? payload.media.mediaType === MediaType.MOVIE
         ? intl.formatMessage(globalMessages.movie)

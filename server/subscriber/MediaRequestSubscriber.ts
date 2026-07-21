@@ -12,11 +12,13 @@ import {
   MediaStatus,
   MediaType,
 } from '@server/constants/media';
-import { getRepository } from '@server/datasource';
+import { getRepository, isPgsql } from '@server/datasource';
 import Media from '@server/entity/Media';
 import { MediaRequest } from '@server/entity/MediaRequest';
 import Season from '@server/entity/Season';
 import SeasonRequest from '@server/entity/SeasonRequest';
+import { getContentPolicyEvaluator } from '@server/lib/contentPolicy';
+import { sendContentPolicyNotification } from '@server/lib/contentPolicy/notifications';
 import notificationManager, { Notification } from '@server/lib/notifications';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
@@ -42,6 +44,49 @@ const sanitizeDisplayName = (displayName: string): string => {
 
 @EventSubscriber()
 export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRequest> {
+  private async guardArrDispatch(entity: MediaRequest): Promise<boolean> {
+    if (entity.status !== MediaRequestStatus.APPROVED) return true;
+    const evaluator = getContentPolicyEvaluator();
+    let allowed = false;
+    try {
+      allowed = await evaluator.defensiveDispatchCheck(entity);
+    } catch (error) {
+      logger.error('Content policy dispatch check failed closed', {
+        label: 'Content Policy',
+        requestId: entity.id,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+    if (allowed) return true;
+
+    entity.status = MediaRequestStatus.PENDING;
+    const manager = getRepository(MediaRequest).manager;
+    await manager.query(
+      isPgsql
+        ? 'UPDATE "media_request" SET "status" = $1 WHERE "id" = $2'
+        : 'UPDATE "media_request" SET "status" = ? WHERE "id" = ?',
+      [MediaRequestStatus.PENDING, entity.id]
+    );
+    await evaluator.recordEvent('defensive_dispatch_block', {
+      mediaType: entity.type,
+      tmdbId: entity.media.tmdbId,
+      decisionId: entity.policyDecisionId ?? undefined,
+      details: { requestId: entity.id },
+    });
+    logger.error('Content policy blocked an unauthorized Arr dispatch', {
+      label: 'Content Policy',
+      requestId: entity.id,
+      tmdbId: entity.media.tmdbId,
+      mediaType: entity.type,
+    });
+    sendContentPolicyNotification(
+      Notification.CONTENT_POLICY_FAILURE,
+      'Defensive Arr dispatch blocked',
+      `${entity.type}:${entity.media.tmdbId} request=${entity.id}`
+    );
+    return false;
+  }
+
   private async notifyAvailableMovie(
     entity: MediaRequest,
     event?: UpdateEvent<MediaRequest>
@@ -185,6 +230,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
       entity.status === MediaRequestStatus.APPROVED &&
       entity.type === MediaType.MOVIE
     ) {
+      if (!(await this.guardArrDispatch(entity))) return;
       try {
         const mediaRepository = getRepository(Media);
         const settings = getSettings();
@@ -479,6 +525,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
       entity.status === MediaRequestStatus.APPROVED &&
       entity.type === MediaType.TV
     ) {
+      if (!(await this.guardArrDispatch(entity))) return;
       try {
         const mediaRepository = getRepository(Media);
         const settings = getSettings();

@@ -111,6 +111,15 @@ interface TvDetailsProps {
   tv?: TvDetailsType;
 }
 
+type PolicyAwareTvDetails = TvDetailsType & {
+  contentPolicy?: {
+    result: 'allow' | 'deny' | 'review';
+    mode: 'audit' | 'enforce';
+    categories: string[];
+    matchedRuleIds: string[];
+  };
+};
+
 const TvDetails = ({ tv }: TvDetailsProps) => {
   const settings = useSettings();
   const { user, hasPermission } = useUser();
@@ -133,7 +142,7 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
     data,
     error,
     mutate: revalidate,
-  } = useSWR<TvDetailsType>(`/api/v1/tv/${router.query.tvId}`, {
+  } = useSWR<PolicyAwareTvDetails>(`/api/v1/tv/${router.query.tvId}`, {
     fallbackData: tv,
     refreshInterval: refreshIntervalHelper(
       {
@@ -661,14 +670,25 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
           <div className="z-20">
             <PlayButton links={mediaLinks} />
           </div>
-          <RequestButton
-            mediaType="tv"
-            onUpdate={() => revalidate()}
-            tmdbId={data?.id}
-            media={data?.mediaInfo}
-            isShowComplete={isComplete}
-            is4kShowComplete={is4kComplete}
-          />
+          {data.contentPolicy?.mode === 'enforce' &&
+          data.contentPolicy.result !== 'allow' ? (
+            <Button
+              as="a"
+              buttonType="danger"
+              href={`/settings/content-policy?mediaType=tv&tmdbId=${data.id}&action=create`}
+            >
+              Policy {data.contentPolicy.result} — review break glass
+            </Button>
+          ) : (
+            <RequestButton
+              mediaType="tv"
+              onUpdate={() => revalidate()}
+              tmdbId={data?.id}
+              media={data?.mediaInfo}
+              isShowComplete={isComplete}
+              is4kShowComplete={is4kComplete}
+            />
+          )}
           {(data.mediaInfo?.status === MediaStatus.AVAILABLE ||
             data.mediaInfo?.status === MediaStatus.PARTIALLY_AVAILABLE ||
             (settings.currentSettings.series4kEnabled &&
