@@ -62,6 +62,8 @@ jobs:
           push: true
           provenance: mode=max
           sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             COMMIT_TAG=${{ github.sha }}
           tags: |
@@ -102,9 +104,30 @@ jobs:
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-          exit-code: 1
+          exit-code: 0
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
+        with:
+          name: seerr-policy-trivy
+          path: trivy-results.sarif
+          if-no-files-found: error
 
       - uses: github/codeql-action/upload-sarif@v3
         if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
         with:
           sarif_file: trivy-results.sarif
+
+      - name: Enforce vulnerability gate
+        run: |
+          findings=$(jq '[.runs[].results[]] | length' trivy-results.sarif)
+          echo "High or critical fixed-vulnerability findings: $findings"
+          test "$findings" -eq 0
+
+      - name: Make GHCR package public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method PATCH \
+            "/orgs/${GITHUB_REPOSITORY_OWNER}/packages/container/seerr" \
+            --field visibility=public
