@@ -6,6 +6,7 @@ on:
   push:
     tags:
       - 'v*'
+      - '!v*-policy.*'
 
 permissions:
   contents: read
