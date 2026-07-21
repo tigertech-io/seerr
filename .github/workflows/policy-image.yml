@@ -14,7 +14,7 @@ permissions:
 
 env:
   IMAGE: ghcr.io/tigertech-io/seerr
-  POLICY_VERSION: 3.3.0-policy.2
+  POLICY_VERSION: 3.3.0-policy.3
 
 jobs:
   validate-and-publish:
@@ -92,7 +92,8 @@ jobs:
           fi
           policy_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
             http://127.0.0.1:5055/api/v1/content-policy/status)
-          test "$policy_status" = 403
+          echo "Unauthenticated content-policy status returned HTTP $policy_status"
+          test "$policy_status" = 401
 
       - name: Remove smoke-test container
         if: always()
