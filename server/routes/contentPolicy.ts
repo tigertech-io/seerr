@@ -9,13 +9,28 @@ import { Router } from 'express';
 
 const routes = Router();
 const evaluator = getContentPolicyEvaluator();
+const secureCsrfCookie = process.env.NODE_ENV !== 'development';
 
-routes.use(csurf());
+// Seerr's global CSRF middleware uses the `_csrf` cookie as its secret. The
+// policy router deliberately adds its own always-on guard, but it must reuse
+// that cookie contract so a token issued by the global middleware validates at
+// both layers.
+routes.use(
+  csurf({
+    cookie: {
+      httpOnly: true,
+      sameSite: true,
+      secure: secureCsrfCookie,
+      key: '_csrf',
+      path: '/',
+    },
+  })
+);
 routes.use((req, res, next) => {
   res.cookie('XSRF-TOKEN', req.csrfToken(), {
     httpOnly: false,
-    sameSite: 'strict',
-    secure: req.secure,
+    sameSite: true,
+    secure: secureCsrfCookie,
   });
   next();
 });
