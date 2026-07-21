@@ -59,14 +59,14 @@ jobs:
             ${{ env.IMAGE }}:3.3.0-policy.1
             ${{ env.IMAGE }}:sha-${{ github.sha }}
 
-      - uses: anchore/sbom-action@v0
+      - uses: anchore/sbom-action@v0.24.0
         with:
           image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
           format: spdx-json
           output-file: seerr-3.3.0-policy.1.spdx.json
           artifact-name: seerr-policy-sbom
 
-      - uses: aquasecurity/trivy-action@0.32.0
+      - uses: aquasecurity/trivy-action@0.36.0
         with:
           image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
           format: sarif
