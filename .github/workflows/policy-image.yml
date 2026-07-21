@@ -125,10 +125,13 @@ jobs:
           echo "High or critical fixed-vulnerability findings: $findings"
           test "$findings" -eq 0
 
-      - name: Make GHCR package public
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify GHCR package is anonymously pullable
         run: |
-          gh api --method PATCH \
-            "/orgs/${GITHUB_REPOSITORY_OWNER}/packages/container/seerr" \
-            --field visibility=public
+          token=$(curl --fail --silent \
+            "https://ghcr.io/token?scope=repository%3Atigertech-io%2Fseerr%3Apull" \
+            | jq --raw-output '.token')
+          test -n "$token" && test "$token" != "null"
+          curl --fail --silent --head \
+            --header "Authorization: Bearer $token" \
+            --header "Accept: application/vnd.oci.image.index.v1+json" \
+            "https://ghcr.io/v2/tigertech-io/seerr/manifests/3.3.0-policy.1"
