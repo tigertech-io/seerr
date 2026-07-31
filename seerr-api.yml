@@ -2381,6 +2381,40 @@ paths:
           description: Interactive administrator session required
         '404':
           description: Policy decision not found
+  /content-policy/decisions/{id}/retire-metadata-failure:
+    post:
+      summary: Retire a source-isolated failed-metadata policy decision
+      tags:
+        - content-policy
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Failed-metadata policy decision retired
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [retired, mediaType, tmdbId]
+                properties:
+                  retired:
+                    type: boolean
+                  mediaType:
+                    type: string
+                    enum: [movie, tv]
+                  tmdbId:
+                    type: integer
+        '403':
+          description: Interactive administrator session required
+        '404':
+          description: Policy decision not found
+        '409':
+          description: Policy decision has authoritative or non-metadata sources
   /content-policy/break-glass:
     post:
       summary: Issue a one-action content-policy override

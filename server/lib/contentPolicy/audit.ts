@@ -146,6 +146,7 @@ export const prewarmContentPolicy = async (): Promise<number> => {
     while (cursor < decisions.length) {
       const item = decisions[cursor++];
       await evaluator.evaluate(item.mediaType, item.tmdbId, {
+        notifyMetadataFailure: false,
         source: 'hourly-prewarm',
       });
       completed += 1;

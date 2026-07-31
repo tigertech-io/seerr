@@ -16,6 +16,7 @@ const contentPolicyOperations: [string, string][] = [
   ['/content-policy/evaluate', 'post'],
   ['/content-policy/reload', 'post'],
   ['/content-policy/decisions/{id}/acknowledge', 'post'],
+  ['/content-policy/decisions/{id}/retire-metadata-failure', 'post'],
   ['/content-policy/break-glass', 'post'],
   ['/content-policy/scans', 'post'],
 ];

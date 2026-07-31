@@ -34,6 +34,7 @@ export type ContentPolicyMetadata = {
   genreIds: number[];
   keywords: { id: number; name?: string }[];
   fetchFailed?: boolean;
+  fetchFailureStatus?: number;
 };
 
 export type ContentPolicyEvaluation = {

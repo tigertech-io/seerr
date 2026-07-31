@@ -23,6 +23,69 @@ import type {
 } from './types';
 
 const DEFAULT_POLICY_PATH = '/app/config/content-policy/policy.yml';
+export const METADATA_FAILURE_NOTIFICATION_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+export const METADATA_FAILURE_PREWARM_RETRY_MS = 24 * 60 * 60 * 1000;
+
+type MetadataFetchErrorDetails = {
+  errorName: string;
+  statusCode?: number;
+};
+
+export const describeMetadataFetchError = (
+  error: unknown
+): MetadataFetchErrorDetails => {
+  let current: unknown = error;
+  let errorName = error instanceof Error ? error.name : 'unknown';
+
+  for (let depth = 0; depth < 5 && current; depth += 1) {
+    if (current instanceof Error) errorName = current.name;
+    if (typeof current !== 'object') break;
+
+    const candidate = current as {
+      cause?: unknown;
+      response?: { status?: unknown };
+    };
+    if (typeof candidate.response?.status === 'number') {
+      return { errorName, statusCode: candidate.response.status };
+    }
+    current = candidate.cause;
+  }
+
+  return { errorName };
+};
+
+export const shouldNotifyMetadataFailure = (
+  recentFailures: Pick<ContentPolicyEvent, 'details'>[],
+  fingerprint: string,
+  notificationRequested = true
+): boolean =>
+  notificationRequested &&
+  !recentFailures.some(
+    (event) =>
+      event.details.fingerprint === fingerprint &&
+      event.details.notificationSent === true
+  );
+
+export const shouldReusePrewarmMetadataFailure = (
+  decision: ContentPolicyDecision | null,
+  input: {
+    force?: boolean;
+    hasMetadata: boolean;
+    policyHash?: string;
+    source?: string;
+    now?: number;
+  }
+): boolean =>
+  Boolean(
+    decision &&
+    !input.force &&
+    !input.hasMetadata &&
+    input.source === 'hourly-prewarm' &&
+    decision.policyHash === input.policyHash &&
+    decision.matchedRuleIds.includes('metadata-fetch-failure') &&
+    (input.now ?? Date.now()) - decision.updatedAt.getTime() <
+      METADATA_FAILURE_PREWARM_RETRY_MS
+  );
 
 export class ContentPolicyError extends Error {
   public constructor(
@@ -311,7 +374,11 @@ export class ContentPolicyEvaluator {
 
   public async fetchMetadata(
     mediaType: MediaType,
-    tmdbId: number
+    tmdbId: number,
+    options: {
+      notifyFailure?: boolean;
+      source?: string;
+    } = {}
   ): Promise<ContentPolicyMetadata> {
     const tmdb = new TheMovieDb();
     try {
@@ -341,22 +408,60 @@ export class ContentPolicyEvaluator {
         keywords: keywordContainer?.keywords ?? keywordContainer?.results ?? [],
       };
     } catch (error) {
+      const errorDetails = describeMetadataFetchError(error);
+      const fingerprint = `${errorDetails.errorName}:${
+        errorDetails.statusCode ?? 'unknown'
+      }`;
+      const notificationRequested = options.notifyFailure !== false;
+      const eventRepository = getRepository(ContentPolicyEvent);
+      const recentFailures = notificationRequested
+        ? await eventRepository.find({
+            where: {
+              eventType: 'metadata_fetch_failure',
+              mediaType,
+              tmdbId,
+              createdAt: MoreThan(
+                new Date(Date.now() - METADATA_FAILURE_NOTIFICATION_COOLDOWN_MS)
+              ),
+            },
+            order: { createdAt: 'DESC' },
+            take: 25,
+          })
+        : [];
+      const notificationSent = shouldNotifyMetadataFailure(
+        recentFailures,
+        fingerprint,
+        notificationRequested
+      );
       await this.recordEvent('metadata_fetch_failure', {
         mediaType,
         tmdbId,
-        details: { error: error instanceof Error ? error.name : 'unknown' },
+        details: {
+          ...errorDetails,
+          fingerprint,
+          source: options.source,
+          notificationSent,
+          notificationReason: notificationSent
+            ? 'sent'
+            : notificationRequested
+              ? 'duplicate-suppressed'
+              : 'source-suppressed',
+        },
       });
-      sendContentPolicyNotification(
-        Notification.CONTENT_POLICY_FAILURE,
-        'Metadata evaluation failed closed',
-        `${mediaType}:${tmdbId}`
-      );
+      if (notificationSent) {
+        sendContentPolicyNotification(
+          Notification.CONTENT_POLICY_FAILURE,
+          'Metadata evaluation failed closed',
+          `${mediaType}:${tmdbId}`
+        );
+      }
       return {
         id: tmdbId,
         mediaType,
         genreIds: [],
         keywords: [],
         fetchFailed: true,
+        fetchFailureStatus: errorDetails.statusCode,
       };
     }
   }
@@ -369,11 +474,41 @@ export class ContentPolicyEvaluator {
       source?: string;
       actorUserId?: number;
       force?: boolean;
+      notifyMetadataFailure?: boolean;
     } = {}
   ): Promise<ContentPolicyEvaluation> {
     const policy = await this.ensureLoaded();
+    const decisionRepository = getRepository(ContentPolicyDecision);
+    const current = await decisionRepository.findOne({
+      where: { mediaType, tmdbId },
+    });
+    if (
+      shouldReusePrewarmMetadataFailure(current, {
+        force: options.force,
+        hasMetadata: Boolean(options.metadata),
+        policyHash: this.policyHash,
+        source: options.source,
+      })
+    ) {
+      if (
+        options.source &&
+        current &&
+        !current.sourceMemberships.includes(options.source)
+      ) {
+        current.sourceMemberships = [
+          ...current.sourceMemberships,
+          options.source,
+        ];
+        await decisionRepository.save(current);
+      }
+      return this.toEvaluation(current as ContentPolicyDecision, true);
+    }
     const metadata =
-      options.metadata ?? (await this.fetchMetadata(mediaType, tmdbId));
+      options.metadata ??
+      (await this.fetchMetadata(mediaType, tmdbId, {
+        notifyFailure: options.notifyMetadataFailure,
+        source: options.source,
+      }));
     const compactMetadata = {
       id: metadata.id,
       mediaType,
@@ -386,12 +521,9 @@ export class ContentPolicyEvaluator {
       genreIds: [...metadata.genreIds].sort((a, b) => a - b),
       keywordIds: metadata.keywords.map(({ id }) => id).sort((a, b) => a - b),
       fetchFailed: metadata.fetchFailed ?? false,
+      fetchFailureStatus: metadata.fetchFailureStatus ?? null,
     };
     const metadataHash = sha256(stableJson(compactMetadata));
-    const decisionRepository = getRepository(ContentPolicyDecision);
-    const current = await decisionRepository.findOne({
-      where: { mediaType, tmdbId },
-    });
     const cacheMs = policy.cacheHours * 60 * 60 * 1000;
     if (
       !options.force &&

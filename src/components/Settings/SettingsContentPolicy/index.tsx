@@ -119,6 +119,13 @@ const SettingsContentPolicy = () => {
   };
 
   if (!status || !decisions || !events) return <LoadingSpinner />;
+  const selectedDecisionCanRetire =
+    selectedDecision?.result === 'review' &&
+    selectedDecision.matchedRuleIds.includes('metadata-fetch-failure') &&
+    Boolean(selectedDecision.sourceMemberships?.length) &&
+    selectedDecision.sourceMemberships?.every((source) =>
+      ['discover-search', 'hourly-prewarm'].includes(source)
+    );
 
   return (
     <>
@@ -480,6 +487,36 @@ const SettingsContentPolicy = () => {
               {selectedDecision.manualDenySnippet}
             </pre>
           </div>
+          {selectedDecisionCanRetire && (
+            <div className="mt-4 rounded border border-yellow-700 bg-gray-900 p-4">
+              <div className="text-sm text-gray-300">
+                This failed metadata decision has discovery-only sources. It can
+                be retired without changing policy rules, requests, or library
+                state. A future discovery result will be evaluated again.
+              </div>
+              <Button
+                buttonSize="sm"
+                buttonType="warning"
+                className="mt-3"
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    const confirmed = window.confirm(
+                      `Retire stale metadata decision ${selectedDecision.mediaType}:${selectedDecision.tmdbId}?`
+                    );
+                    if (!confirmed) return false;
+                    await axios.post(
+                      `/api/v1/content-policy/decisions/${selectedDecision.id}/retire-metadata-failure`
+                    );
+                    setSelectedDecision(undefined);
+                    return true;
+                  }, 'Stale metadata decision retired.')
+                }
+              >
+                Retire stale metadata decision
+              </Button>
+            </div>
+          )}
         </section>
       )}
 

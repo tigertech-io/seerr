@@ -5,6 +5,7 @@ import ContentPolicyDecision from '@server/entity/ContentPolicyDecision';
 import ContentPolicyEvent from '@server/entity/ContentPolicyEvent';
 import { getContentPolicyEvaluator } from '@server/lib/contentPolicy';
 import { runContentPolicyLibraryAudit } from '@server/lib/contentPolicy/audit';
+import { isRetirableMetadataFailureDecision } from '@server/lib/contentPolicy/retirement';
 import { Router } from 'express';
 
 const routes = Router();
@@ -201,6 +202,65 @@ routes.post(
     } catch (error) {
       next({
         status: 404,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+);
+
+routes.post(
+  '/decisions/:id/retire-metadata-failure',
+  requireInteractiveAdministrator,
+  async (req, res, next) => {
+    try {
+      const repository = getRepository(ContentPolicyDecision);
+      const decision = await repository.findOne({
+        where: { id: Number(req.params.id) },
+      });
+      if (!decision) {
+        return res
+          .status(404)
+          .json({ status: 404, message: 'Policy decision not found.' });
+      }
+      if (!isRetirableMetadataFailureDecision(decision)) {
+        return res.status(409).json({
+          status: 409,
+          message:
+            'Only source-isolated metadata-failure reviews can be retired.',
+        });
+      }
+
+      const retired = {
+        id: decision.id,
+        mediaType: decision.mediaType,
+        tmdbId: decision.tmdbId,
+        sourceMemberships: decision.sourceMemberships,
+      };
+      await repository.manager.transaction(async (manager) => {
+        await manager.remove(decision);
+        await manager.save(
+          new ContentPolicyEvent({
+            eventType: 'metadata_failure_decision_retired',
+            mediaType: retired.mediaType,
+            tmdbId: retired.tmdbId,
+            actorUserId: req.user?.id,
+            policyVersion: decision.policyVersion,
+            policyHash: decision.policyHash,
+            details: {
+              retiredDecisionId: retired.id,
+              sourceMemberships: retired.sourceMemberships,
+            },
+          })
+        );
+      });
+      return res.json({
+        retired: true,
+        mediaType: retired.mediaType,
+        tmdbId: retired.tmdbId,
+      });
+    } catch (error) {
+      next({
+        status: 500,
         message: error instanceof Error ? error.message : String(error),
       });
     }

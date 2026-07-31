@@ -20,8 +20,10 @@ Events store IDs, categories, rule IDs, source memberships, and hashes. They do 
 
 The administrator-only `/settings/content-policy` page and `/api/v1/content-policy/*` APIs expose status, decisions, evidence, events, reload, on-demand evaluation, read-only scans, acknowledgements, and break glass. Mutation endpoints require both an interactive administrator session and a route-specific CSRF token; the global API key cannot issue overrides.
 
+Metadata failures remain fail-closed review decisions. Identical failure notifications are persisted and deduplicated for 24 hours, and the hourly discovery prewarm reuses a recent failed decision instead of retrying it until 24 hours have elapsed. Prewarm retries never send failure notifications. An interactive administrator can retire a failed decision only when every source is `discover-search` or `hourly-prewarm`; decisions associated with a library, request, action, or Arr dispatch are not eligible. Retirement does not change policy rules or library state, and a future discovery result is evaluated again.
+
 ## Image and upgrades
 
-The `Policy image` workflow runs typecheck, lint, tests, production build, a linux/amd64 image build, SBOM generation, and a high/critical vulnerability scan before publishing `ghcr.io/tigertech-io/seerr:3.3.0-policy.5`. Deploy by resolved digest only.
+The `Policy image` workflow runs typecheck, lint, tests, production build, a linux/amd64 image build, SBOM generation, and a high/critical vulnerability scan before publishing `ghcr.io/tigertech-io/seerr:3.3.0-policy.6`. Deploy by resolved digest only.
 
 For every upstream upgrade, rebase a new policy branch on the exact upstream tag, rerun acquisition-boundary and filter tests, publish a new immutable policy tag, and complete an audit-mode observation window before enforcement is approved.
