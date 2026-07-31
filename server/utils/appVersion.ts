@@ -30,7 +30,7 @@ export const getAppVersion = (): string => {
 };
 
 // Maintained builds append a policy revision (for example
-// `3.3.0-policy.6`) while remaining based on an exact upstream release.
+// `3.3.0-policy.7`) while remaining based on an exact upstream release.
 // Compare the numeric upstream versions so the custom suffix does not make a
 // current maintained build appear older than the release it tracks.
 export const isNewerUpstreamRelease = (

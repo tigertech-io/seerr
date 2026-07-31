@@ -24,6 +24,6 @@ Metadata failures remain fail-closed review decisions. Identical failure notific
 
 ## Image and upgrades
 
-The `Policy image` workflow runs typecheck, lint, tests, production build, a linux/amd64 image build, SBOM generation, and a high/critical vulnerability scan before publishing `ghcr.io/tigertech-io/seerr:3.3.0-policy.6`. Deploy by resolved digest only.
+The `Policy image` workflow runs typecheck, lint, tests, production build, a linux/amd64 image build, SBOM generation, and a high/critical vulnerability scan before publishing `ghcr.io/tigertech-io/seerr:3.3.0-policy.7`. Deploy by resolved digest only.
 
 For every upstream upgrade, rebase a new policy branch on the exact upstream tag, rerun acquisition-boundary and filter tests, publish a new immutable policy tag, and complete an audit-mode observation window before enforcement is approved.
