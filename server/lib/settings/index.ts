@@ -368,8 +368,7 @@ export type JobId =
   | 'availability-sync'
   | 'process-blocklisted-tags'
   | 'content-policy-prewarm'
-  | 'content-policy-library-audit'
-  | 'content-policy-digest';
+  | 'content-policy-library-audit';
 
 export interface AllSettings {
   clientId: string;
@@ -613,9 +612,6 @@ class Settings {
         },
         'content-policy-library-audit': {
           schedule: '0 30 3 * * *',
-        },
-        'content-policy-digest': {
-          schedule: '0 0 8 * * *',
         },
       },
       network: {

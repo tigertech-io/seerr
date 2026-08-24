@@ -19,7 +19,6 @@ export enum Notification {
   MEDIA_AUTO_REQUESTED = 4096,
   CONTENT_POLICY_FAILURE = 8192,
   CONTENT_POLICY_BREAK_GLASS = 16384,
-  CONTENT_POLICY_DIGEST = 32768,
 }
 
 export const hasNotificationType = (

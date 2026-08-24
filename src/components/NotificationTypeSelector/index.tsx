@@ -70,9 +70,6 @@ const messages = defineMessages('components.NotificationTypeSelector', {
   contentPolicyBreakGlass: 'Content Policy Break Glass',
   contentPolicyBreakGlassDescription:
     'Send immediate notifications when a break-glass override is issued, used, rejected, or expires unused.',
-  contentPolicyDigest: 'Content Policy Daily Digest',
-  contentPolicyDigestDescription:
-    'Send the daily digest when new denies, review items, or library findings exist.',
 });
 
 export const hasNotificationType = (
@@ -117,7 +114,6 @@ export enum Notification {
   MEDIA_AUTO_REQUESTED = 4096,
   CONTENT_POLICY_FAILURE = 8192,
   CONTENT_POLICY_BREAK_GLASS = 16384,
-  CONTENT_POLICY_DIGEST = 32768,
 }
 
 export const ALL_NOTIFICATIONS = Object.values(Notification)
@@ -225,16 +221,6 @@ const NotificationTypeSelector = ({
           messages.contentPolicyBreakGlassDescription
         ),
         value: Notification.CONTENT_POLICY_BREAK_GLASS,
-        hidden: Boolean(user && !hasPermission(Permission.ADMIN)),
-        hasNotifyUser: false,
-      },
-      {
-        id: 'content-policy-digest',
-        name: intl.formatMessage(messages.contentPolicyDigest),
-        description: intl.formatMessage(
-          messages.contentPolicyDigestDescription
-        ),
-        value: Notification.CONTENT_POLICY_DIGEST,
         hidden: Boolean(user && !hasPermission(Permission.ADMIN)),
         hasNotifyUser: false,
       },

@@ -4,8 +4,7 @@ import notificationManager from '@server/lib/notifications';
 export const sendContentPolicyNotification = (
   type:
     | Notification.CONTENT_POLICY_FAILURE
-    | Notification.CONTENT_POLICY_BREAK_GLASS
-    | Notification.CONTENT_POLICY_DIGEST,
+    | Notification.CONTENT_POLICY_BREAK_GLASS,
   subject: string,
   message: string
 ): void => {

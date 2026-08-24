@@ -19,6 +19,11 @@ import { BaseAgent } from './agent';
 const PUBLIC_LOGO_URL =
   'https://raw.githubusercontent.com/seerr-team/seerr/refs/heads/develop/public/logo_full.svg';
 
+export const buildContentPolicyEmailSubject = (
+  subject: string,
+  applicationTitle: string
+): string => `${subject} [${applicationTitle}]`;
+
 const messages = defineMessages('notifications.agents.email', {
   issueType: '{type} issue',
   issue: 'issue',
@@ -113,6 +118,7 @@ class EmailAgent
           to: recipientEmail,
         },
         locals: {
+          subject: `Test Notification [${applicationTitle}]`,
           body: payload.message,
           applicationUrl,
           applicationTitle,
@@ -125,13 +131,16 @@ class EmailAgent
 
     if (
       type === Notification.CONTENT_POLICY_FAILURE ||
-      type === Notification.CONTENT_POLICY_BREAK_GLASS ||
-      type === Notification.CONTENT_POLICY_DIGEST
+      type === Notification.CONTENT_POLICY_BREAK_GLASS
     ) {
       return {
         template: path.join(__dirname, '../../../templates/email/test-email'),
         message: { to: recipientEmail },
         locals: {
+          subject: buildContentPolicyEmailSubject(
+            payload.subject,
+            applicationTitle
+          ),
           body: `${payload.subject}${payload.message ? `\n\n${payload.message}` : ''}`,
           applicationUrl,
           applicationTitle,

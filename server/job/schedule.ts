@@ -1,6 +1,4 @@
 import { MediaServerType } from '@server/constants/server';
-import { getRepository } from '@server/datasource';
-import ContentPolicyDecision from '@server/entity/ContentPolicyDecision';
 import blocklistedTagsProcessor from '@server/job/blocklistedTagsProcessor';
 import availabilitySync from '@server/lib/availabilitySync';
 import { getContentPolicyEvaluator } from '@server/lib/contentPolicy';
@@ -8,10 +6,8 @@ import {
   prewarmContentPolicy,
   runContentPolicyLibraryAudit,
 } from '@server/lib/contentPolicy/audit';
-import { sendContentPolicyNotification } from '@server/lib/contentPolicy/notifications';
 import downloadTracker from '@server/lib/downloadtracker';
 import ImageProxy from '@server/lib/imageproxy';
-import { Notification } from '@server/lib/notifications';
 import refreshToken from '@server/lib/refreshToken';
 import {
   jellyfinFullScanner,
@@ -25,7 +21,6 @@ import { getSettings } from '@server/lib/settings';
 import watchlistSync from '@server/lib/watchlistsync';
 import logger from '@server/logger';
 import schedule from 'node-schedule';
-import { In, MoreThan } from 'typeorm';
 
 interface ScheduledJob {
   id: JobId;
@@ -312,49 +307,6 @@ export const startJobs = (): void => {
         });
       }
     ),
-  });
-
-  scheduledJobs.push({
-    id: 'content-policy-digest',
-    name: 'Content Policy Daily Digest',
-    type: 'command',
-    interval: 'days',
-    cronSchedule: jobs['content-policy-digest'].schedule,
-    job: schedule.scheduleJob(jobs['content-policy-digest'].schedule, () => {
-      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      getRepository(ContentPolicyDecision)
-        .find({
-          where: {
-            result: In(['deny', 'review']),
-            updatedAt: MoreThan(since),
-          },
-        })
-        .then((decisions) => {
-          const denies = decisions.filter(
-            (item) => item.result === 'deny'
-          ).length;
-          const reviews = decisions.length - denies;
-          const libraryFindings = decisions.filter((item) =>
-            item.sourceMemberships.some((source) =>
-              /^(seerr|radarr|sonarr):/.test(source)
-            )
-          ).length;
-          if (decisions.length) {
-            sendContentPolicyNotification(
-              Notification.CONTENT_POLICY_DIGEST,
-              'Daily content-policy digest',
-              `denies=${denies} reviews=${reviews} libraryFindings=${libraryFindings}`
-            );
-          }
-        })
-        .catch((error) =>
-          logger.error('Content policy digest failed', {
-            label: 'Content Policy',
-            errorMessage:
-              error instanceof Error ? error.message : String(error),
-          })
-        );
-    }),
   });
 
   logger.info('Scheduled jobs loaded', { label: 'Jobs' });
