@@ -68,9 +68,11 @@ class RadarrAPI extends ServarrBase<{ movieId: number }> {
     super({ url, apiKey, cacheName: 'radarr', apiName: 'Radarr' });
   }
 
-  public getMovies = async (): Promise<RadarrMovie[]> => {
+  public getMovies = async (
+    options: { timeout?: number } = {}
+  ): Promise<RadarrMovie[]> => {
     try {
-      const response = await this.axios.get<RadarrMovie[]>('/movie');
+      const response = await this.axios.get<RadarrMovie[]>('/movie', options);
 
       return response.data;
     } catch (e) {

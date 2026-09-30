@@ -9,6 +9,10 @@ import { getContentPolicyEvaluator } from '.';
 
 type ExternalIdLookup = Pick<TheMovieDb, 'getByExternalId'>;
 
+// The full Radarr library takes longer than the interactive API timeout.
+// Keep the longer bound limited to this read-only audit request.
+export const LIBRARY_AUDIT_RADARR_TIMEOUT_MS = 60_000;
+
 export type SonarrTmdbResolution =
   | { tmdbId: number; failure?: never }
   | {
@@ -36,7 +40,7 @@ export const resolveSonarrTmdbId = async (
   }
 };
 
-export const runContentPolicyLibraryAudit = async (
+const performContentPolicyLibraryAudit = async (
   actorUserId?: number
 ): Promise<{ evaluated: number; unresolved: number; readOnly: true }> => {
   const evaluator = getContentPolicyEvaluator();
@@ -71,7 +75,9 @@ export const runContentPolicyLibraryAudit = async (
       apiKey: server.apiKey,
       url: RadarrAPI.buildUrl(server, '/api/v3'),
     });
-    for (const movie of await api.getMovies()) {
+    for (const movie of await api.getMovies({
+      timeout: LIBRARY_AUDIT_RADARR_TIMEOUT_MS,
+    })) {
       add(MediaType.MOVIE, movie.tmdbId, `radarr:${movie.id}`);
     }
   }
@@ -133,6 +139,20 @@ export const runContentPolicyLibraryAudit = async (
     details: { evaluated: items.length, unresolved, readOnly: true },
   });
   return { evaluated: items.length, unresolved, readOnly: true };
+};
+
+export const runContentPolicyLibraryAudit = async (
+  actorUserId?: number
+): Promise<{ evaluated: number; unresolved: number; readOnly: true }> => {
+  try {
+    return await performContentPolicyLibraryAudit(actorUserId);
+  } catch (error) {
+    await getContentPolicyEvaluator().recordEvent('library_scan_failed', {
+      actorUserId,
+      details: { errorName: error instanceof Error ? error.name : 'unknown' },
+    });
+    throw error;
+  }
 };
 
 export const prewarmContentPolicy = async (): Promise<number> => {

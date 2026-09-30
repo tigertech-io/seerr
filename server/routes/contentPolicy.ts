@@ -305,10 +305,6 @@ routes.post(
         .status(202)
         .json(await runContentPolicyLibraryAudit(req.user?.id));
     } catch (error) {
-      await evaluator.recordEvent('library_scan_failed', {
-        actorUserId: req.user?.id,
-        details: { error: error instanceof Error ? error.name : 'unknown' },
-      });
       next({
         status: 503,
         message: error instanceof Error ? error.message : String(error),
