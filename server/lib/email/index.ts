@@ -49,7 +49,9 @@ class PreparedEmail extends Email {
         },
       },
       send: true,
-      transport: transport,
+      // email-templates' published types still describe the Nodemailer 8
+      // Mail class; the v10 transporter retains the runtime sendMail API.
+      transport: transport as unknown as Email.NodeMailerTransportOptions,
       preview: false,
     });
   }
