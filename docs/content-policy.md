@@ -24,6 +24,6 @@ Metadata failures remain fail-closed review decisions. Identical failure notific
 
 ## Image and upgrades
 
-The `Policy image` workflow runs typecheck, lint, tests, production build, a linux/amd64 image build, SBOM generation, and a high/critical vulnerability scan before publishing `ghcr.io/tigertech-io/seerr:3.3.0-policy.9`. Deploy by resolved digest only. Policy.9 gives the read-only Radarr movie-list request in the library audit a 60-second timeout and records failed scheduled or administrator-triggered scans once. It preserves the existing enforcement rules and immediate failure notifications.
+The `Policy image` workflow runs typecheck, lint, tests, production build, a linux/amd64 image build, SBOM generation, and a high/critical vulnerability scan before publishing `ghcr.io/tigertech-io/seerr:3.3.0-policy.10`. Deploy by resolved digest only. Policy.10 gives the read-only Radarr movie-list request in the library audit a 60-second timeout, records failed scheduled or administrator-triggered scans once, and updates fixed-vulnerability dependencies after the policy.9 image failed the release scan. It preserves the existing enforcement rules and immediate failure notifications.
 
 For every upstream upgrade, rebase a new policy branch on the exact upstream tag, rerun acquisition-boundary and filter tests, publish a new immutable policy tag, and complete an audit-mode observation window before enforcement is approved.

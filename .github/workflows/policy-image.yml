@@ -14,7 +14,7 @@ permissions:
 
 env:
   IMAGE: ghcr.io/tigertech-io/seerr
-  POLICY_VERSION: 3.3.0-policy.9
+  POLICY_VERSION: 3.3.0-policy.10
 
 jobs:
   validate-and-publish:
